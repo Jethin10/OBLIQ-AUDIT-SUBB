@@ -1,0 +1,49 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+npm-install.log*
+
+# env files
+.env*
+
+# uploaded files (runtime data, not source)
+/uploads/*
+!/uploads/.gitkeep
+
+# sqlite database (runtime data, recreated via `npm run seed`)
+/data/
+
+# local test/build/dev artifacts
+/dev-server*.log
+/build-final.*
+/seed-out.log
+/seed-err.txt
+/test-out.log
+/test-exit.txt
+/health.log
+/probe.log
+/db-inspect.log
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
