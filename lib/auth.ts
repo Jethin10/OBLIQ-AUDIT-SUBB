@@ -28,13 +28,18 @@ const SESSION_COOKIE = "obliq_session";
 const SESSION_TTL_DAYS = 7;
 
 const PERMISSIONS: Record<Role, string[]> = {
+  // NOTE: there is intentionally no separate "audit:view" permission.
+  // Audit events are never listed globally — they are only returned scoped
+  // to a document or client the caller is already authorized to view
+  // (via "document:view" / "client:view", plus firm + staff-assignment
+  // scoping in the service layer). A standalone audit permission would
+  // either duplicate those checks or punch a hole through them.
   STAFF: ["client:view", "document:view", "document:upload"],
   REVIEWER: [
     "client:view",
     "client:create",
     "document:view",
     "document:review",
-    "audit:view",
   ],
 };
 

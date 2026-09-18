@@ -66,8 +66,10 @@ test("staff sees only assigned clients and no staff list", async () => {
   const res = await api(rohit.cookie, "/api/clients");
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.equal(body.clients.length, 1);
-  assert.equal(body.clients[0].name, "ABC Traders Pvt. Ltd.");
+  // Seed gives Rohit exactly one client; later tests create more clients for
+  // him, so assert membership (not an exact count) to stay order-independent.
+  assert.ok(body.clients.some((c) => c.name === "ABC Traders Pvt. Ltd."));
+  assert.ok(body.clients.every((c) => c.name !== "Vikram Enterprises Pvt. Ltd."));
   assert.deepEqual(body.staff, []);
 });
 
@@ -96,10 +98,12 @@ test("staff cannot create clients or review documents", async () => {
 test("reviewer can create a client and sees the default checklist", async () => {
   const staff = (await (await api(aman.cookie, "/api/clients")).json()).staff;
   assert.ok(staff.length >= 1);
+  // Unique name per run: the suite may run against a non-fresh DB.
+  const uniqueName = `Test Industries ${Date.now()}`;
   const res = await api(aman.cookie, "/api/clients", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "Test Industries", assignedStaffId: staff[0].id }),
+    body: JSON.stringify({ name: uniqueName, assignedStaffId: staff[0].id }),
   });
   assert.equal(res.status, 201);
   const created = await res.json();
@@ -247,6 +251,52 @@ test("audit history records the full story in order, with versions and reasons",
   assert.notEqual(v1.byteLength, v2.byteLength);
   assert.ok(Buffer.from(v1).toString().startsWith("%PDF-1.4"));
 });
+
+test("unassigned same-firm staff get 404 on another client docs", async () => {
+  // Vikram (firm-1 staff) owns 'Vikram Enterprises'; Rohit (firm-1 staff)
+  // owns 'ABC Traders'. Same firm, different assignments -> 404 on reads,
+  // downloads, uploads AND client detail, for both staffers symmetrically.
+  const vikram = await login("vikram@abc.test");
+  const vikramClients = await (await api(vikram.cookie, "/api/clients")).json();
+  assert.equal(vikramClients.clients.length, 1);
+  assert.equal(vikramClients.clients[0].name, "Vikram Enterprises Pvt. Ltd.");
+  const vikramClientId = vikramClients.clients[0].id;
+  const vikramDocs = await (await api(vikram.cookie, `/api/clients/${vikramClientId}`)).json();
+  const vikramDocId = vikramDocs.documents[0].id;
+  assert.notEqual(vikramDocId, bankStatement.id);
+  // Rohit probes Vikram's client + document directly -> all 404.
+  assert.equal((await api(rohit.cookie, `/api/clients/${vikramClientId}`)).status, 404);
+  assert.equal((await api(rohit.cookie, `/api/documents/${vikramDocId}`)).status, 404);
+  assert.equal((await api(rohit.cookie, `/api/documents/${vikramDocId}/file`)).status, 404);
+  const form = new FormData();
+  form.append("file", makePdf("intrusion-same-firm"), "x.pdf");
+  assert.equal((await api(rohit.cookie, `/api/documents/${vikramDocId}/upload`, {
+    method: "POST",
+    body: form,
+  })).status, 404);
+  // And symmetrically: Vikram probes Rohit's Bank Statement -> 404.
+  assert.equal((await api(vikram.cookie, `/api/documents/${bankStatement.id}`)).status, 404);
+  assert.equal((await api(vikram.cookie, `/api/documents/${bankStatement.id}/file`)).status, 404);
+  // Sanity: each staffer CAN read their own; the reviewer can read both.
+  const amanSession = await login("aman@abc.test");
+  assert.equal((await api(amanSession.cookie, `/api/documents/${vikramDocId}`)).status, 200);
+  assert.equal((await api(rohit.cookie, `/api/documents/${bankStatement.id}`)).status, 200);
+});
+
+test("reviewer sees file metadata in list and detail", async () => {
+  // After the full review loop, Bank Statement has 2 versions with names.
+  const amanSession = await login("aman@abc.test");
+  const list = await (await api(amanSession.cookie, "/api/clients/1")).json();
+  const doc = list.documents.find((x) => x.doc_type === "Bank Statement");
+  assert.ok(doc);
+  assert.equal(doc.version, 2);
+  assert.ok(doc.file_name && doc.file_name.endsWith(".pdf"));
+  const detail = await (await api(amanSession.cookie, `/api/documents/${doc.id}`)).json();
+  assert.equal(detail.document.file_name, doc.file_name);
+  assert.equal(detail.versions.length, 2);
+  assert.ok(detail.versions.every((v) => v.file_name && v.file_size > 0));
+});
+
 
 test("firm B cannot see or touch firm A data (404 everywhere)", async () => {
   assert.equal((await api(priya.cookie, "/api/clients/1")).status, 404);

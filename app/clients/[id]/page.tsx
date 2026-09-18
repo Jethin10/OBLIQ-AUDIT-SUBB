@@ -8,7 +8,7 @@ import {
   listRecentEventsForClient,
 } from "@/lib/clients";
 import { LogoutButton } from "../../auth-forms";
-import { ClientWorkspace, type UiDocument, type UiEvent } from "../workspace";
+import { ClientWorkspace, type UiEvent } from "../workspace";
 
 export default async function ClientDetailPage({
   params,
@@ -26,34 +26,32 @@ export default async function ClientDetailPage({
     const client = getClientForUser(clientId, user);
     const documents = listDocumentsForClient(clientId, user.firmId);
     const events = listRecentEventsForClient(clientId, user.firmId);
+    const approved = documents.filter((document) => document.status === "APPROVED").length;
+    const corrections = documents.filter((document) => document.status === "CORRECTION_REQUIRED").length;
 
     return (
-      <main className="mx-auto min-h-screen max-w-5xl px-4 py-8">
-        <header className="flex items-center justify-between">
-          <div>
-            <Link
-              href="/clients"
-              className="text-xs font-medium text-indigo-600 hover:underline"
-            >
-              ← All clients
-            </Link>
-            <p className="text-xs font-medium uppercase tracking-wide text-indigo-600">
-              {user.firmName}
-            </p>
-            <h1 className="text-2xl font-semibold text-slate-900">{client.name}</h1>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Assigned staff: {client.staff_name ?? "—"}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-slate-500">
-              {user.name} · {user.role}
-            </span>
+      <div className="ob-app ob-page-enter">
+        <header className="ob-header">
+          <Link href="/clients" className="ob-logo">OBLIQ</Link>
+          <span className="ob-header-path">Clients / {client.name}</span>
+          <div className="ob-header-user">
+            <span>{user.name} / {user.role.toLowerCase()}</span>
             <LogoutButton />
           </div>
         </header>
 
-        <div className="mt-8">
+        <main className="ob-main">
+          <section className="ob-hero">
+            <div className="ob-hero-meta ob-reveal">
+              <p><Link href="/clients">Back to clients</Link><br />{user.firmName}</p>
+              <p>Assigned to {client.staff_name ?? "Unassigned"}<br />{approved}/{documents.length} approved / {corrections} corrections</p>
+            </div>
+            <div className="ob-hero-copy ob-reveal" style={{ "--delay": "90ms" } as React.CSSProperties}>
+              <h1 className="long">{client.name}</h1>
+              <p>Required evidence, review decisions, and every material action in one record.</p>
+            </div>
+          </section>
+
           <ClientWorkspace
             clientId={client.id}
             clientName={client.name}
@@ -61,8 +59,8 @@ export default async function ClientDetailPage({
             events={events as UiEvent[]}
             role={user.role}
           />
-        </div>
-      </main>
+        </main>
+      </div>
     );
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();

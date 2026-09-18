@@ -1,5 +1,5 @@
 import { ApiError } from "./errors";
-import { query, queryOne, run, runInsert, transaction } from "./db";
+import { query, queryOne, runInsert, transaction } from "./db";
 import { recordAudit, recordSystemAudit } from "./audit";
 import type { SessionUser } from "./auth";
 
@@ -83,12 +83,13 @@ export interface DocumentListRow {
   uploaded_at: string | null;
   uploader_name: string | null;
   correction_comment: string | null;
+  file_name: string | null;
 }
 
 export function listDocumentsForClient(clientId: number, firmId: number): DocumentListRow[] {
   return query<DocumentListRow>(
     `SELECT d.id, d.doc_type, d.status, d.version, d.uploaded_at,
-            up.name AS uploader_name, d.correction_comment
+            up.name AS uploader_name, d.correction_comment, d.file_name
        FROM documents d
        LEFT JOIN users up ON up.id = d.uploaded_by
       WHERE d.firm_id = ? AND d.client_id = ?

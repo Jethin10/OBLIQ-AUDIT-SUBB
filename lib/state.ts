@@ -40,9 +40,11 @@ const TRANSITIONS: Record<string, DocumentStatus> = {
   "PENDING:UPLOAD": "UPLOADED",
   // Staff responds to a correction request with a revised file
   "CORRECTION_REQUIRED:UPLOAD": "UPLOADED",
-  // Staff sends a revised version even after approval — starts a fresh review
-  // cycle as a new version (an approved sign-off is never silently mutated)
-  "APPROVED:UPLOAD": "UPLOADED",
+  // NOTE: there is intentionally no "APPROVED:UPLOAD" transition.
+  // An approved sign-off is immutable — storeUpload rejects uploads to
+  // APPROVED documents with 409, and the acceptance suite asserts this.
+  // Re-opening an approved item would need a new review cycle, which is
+  // out of scope for this prototype.
 
   // Reviewer picks the document up
   "UPLOADED:START_REVIEW": "UNDER_REVIEW",

@@ -24,6 +24,9 @@ export interface DocumentRow {
   doc_type: string;
   status: string;
   version: number;
+  file_name: string | null;
+  file_mime: string | null;
+  file_size: number | null;
   uploaded_at: string | null;
   review_started_by: number | null;
   reviewed_by: number | null;
@@ -38,18 +41,34 @@ function statusLabel(status: string): string {
 }
 
 export function getDocumentForUser(documentId: number, user: SessionUser): DocumentRow {
-  const doc = queryOne<DocumentRow>(
-    `SELECT d.*, c.name AS client_name,
+  const doc = queryOne<
+    DocumentRow & { assigned_staff_id: number | null }
+  >(
+    `SELECT d.id, d.firm_id, d.client_id, d.doc_type, d.status, d.version,
+            d.file_name, d.file_mime, d.file_size, d.uploaded_at,
+            d.review_started_by, d.reviewed_by, d.reviewed_at,
+            d.correction_comment,
+            c.name AS client_name, c.assigned_staff_id,
             up.name AS uploader_name, rv.name AS reviewer_name
        FROM documents d
-       JOIN clients c ON c.id = d.client_id
+       JOIN clients c ON c.id = d.client_id AND c.firm_id = d.firm_id
        LEFT JOIN users up ON up.id = d.uploaded_by
        LEFT JOIN users rv ON rv.id = d.reviewed_by
       WHERE d.id = ? AND d.firm_id = ?`,
     [documentId, user.firmId]
   );
   if (!doc) throw new ApiError(404, "Document not found");
-  return doc;
+  // Staff may only read documents for clients assigned to them. Reviewers
+  // see every client in their firm. Return 404 (not 403) so an unassigned
+  // staff member cannot probe for the existence of other clients' docs —
+  // consistent with getClientForUser which filters by assignment.
+  if (user.role === "STAFF" && doc.assigned_staff_id !== user.id) {
+    throw new ApiError(404, "Document not found");
+  }
+  // Strip the internal assignment column before returning to callers.
+  const { assigned_staff_id, ...publicDoc } = doc;
+  void assigned_staff_id;
+  return publicDoc as DocumentRow;
 }
 
 export function listEventsForDocument(documentId: number, firmId: number) {
@@ -101,8 +120,10 @@ function loadOwnedDocument(user: SessionUser, documentId: number) {
     [documentId, user.firmId]
   );
   if (!doc) throw new ApiError(404, "Document not found");
+  // Same 404 as getDocumentForUser: an unassigned staffer must not be able
+  // to distinguish "another client's document" from "no such document".
   if (user.role === "STAFF" && doc.assigned_staff_id !== user.id) {
-    throw new ApiError(403, "This client is assigned to another staff member");
+    throw new ApiError(404, "Document not found");
   }
   return doc;
 }

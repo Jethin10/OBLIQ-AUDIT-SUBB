@@ -16,13 +16,13 @@ export async function GET(
     if (!Number.isInteger(documentId)) {
       return Response.json({ error: "Invalid document id" }, { status: 400 });
     }
-    // Existence + tenancy check first (404 must not leak file bytes either way)
-    getDocumentForUser(documentId, user);
+    // Existence + tenancy (+ staff assignment) check first
+    // (404 must not leak file bytes either way)
+    const currentDoc = getDocumentForUser(documentId, user);
 
     const versionParam = request.nextUrl.searchParams.get("version");
-    const current = getDocumentForUser(documentId, user).version;
     const version =
-      versionParam && /^\d+$/.test(versionParam) ? Number(versionParam) : current;
+      versionParam && /^\d+$/.test(versionParam) ? Number(versionParam) : currentDoc.version;
 
     const file = getVersionFile(documentId, version, user.firmId);
     if (!file) {

@@ -32,9 +32,14 @@ npm-install.log*
 
 # sqlite database (runtime data, recreated via `npm run seed`)
 /data/
+/reference-ui/
+/.playwright-cli/
+/.next-corrupt-*/
 
 # local test/build/dev artifacts
 /dev-server*.log
+/reference-server*.log
+/dev-ui*.log
 /build-final.*
 /seed-out.log
 /seed-err.txt

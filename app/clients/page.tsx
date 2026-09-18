@@ -1,9 +1,9 @@
-import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/auth";
-import { listClientsForUser } from "@/lib/clients";
-import { can } from "@/lib/auth";
-import { LogoutButton } from "../auth-forms";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getSessionUser, can } from "@/lib/auth";
+import { listClientsForUser, listStaffForUser } from "@/lib/clients";
+import { LogoutButton } from "../auth-forms";
+import { CreateClientForm } from "./create-client-form";
 import { STATUS_LABELS } from "@/lib/format";
 
 export default async function ClientsPage() {
@@ -12,78 +12,77 @@ export default async function ClientsPage() {
 
   const clients = listClientsForUser(user);
   const isReviewer = can(user, "client:create");
+  const staff = listStaffForUser(user);
+  const approved = clients.reduce((total, client) => total + client.approved, 0);
+  const documents = clients.reduce((total, client) => total + client.total, 0);
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-4 py-8">
-      <header className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-indigo-600">
-            {user.firmName}
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-900">Clients</h1>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-slate-500">
-            {user.name} · {user.role}
-          </span>
+    <div className="ob-app ob-page-enter">
+      <header className="ob-header">
+        <Link href="/clients" className="ob-logo">OBLIQ</Link>
+        <span className="ob-header-path">Clients / Audit workspace</span>
+        <div className="ob-header-user">
+          <span>{user.name} / {user.role.toLowerCase()}</span>
           <LogoutButton />
         </div>
       </header>
 
-      <div className="mt-8 space-y-3">
-        {clients.length === 0 && (
-          <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-            No clients assigned to you yet.
-          </p>
-        )}
-        {clients.map((client) => {
-          const progress =
-            client.total > 0 ? Math.round((client.approved / client.total) * 100) : 0;
-          return (
-            <Link
-              key={client.id}
-              href={`/clients/${client.id}`}
-              className="block rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-300 hover:shadow-md"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-semibold text-slate-900">{client.name}</h2>
-                  <p className="mt-0.5 text-sm text-slate-500">
-                    Assigned staff: {client.staff_name ?? "—"}
-                  </p>
-                </div>
-                {client.corrections > 0 && (
-                  <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 ring-1 ring-red-200">
-                    {client.corrections} correction
-                    {client.corrections > 1 ? "s" : ""} needed
-                  </span>
-                )}
-              </div>
-              <div className="mt-4 flex items-center gap-3">
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className="h-full rounded-full bg-emerald-500 transition-all"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <span className="text-xs text-slate-500">
-                  {client.approved}/{client.total} approved
-                </span>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
+      <main className="ob-main">
+        <section className="ob-hero">
+          <div className="ob-hero-meta ob-reveal">
+            <p>{user.firmName}<br />Document review register</p>
+            <p>{clients.length} client{clients.length === 1 ? "" : "s"}<br />{approved} of {documents} documents approved</p>
+          </div>
+          <div className="ob-hero-copy ob-reveal" style={{ "--delay": "90ms" } as React.CSSProperties}>
+            <h1>Clients</h1>
+            <p>Audit work, stripped back to evidence, review, correction, and a record that holds.</p>
+          </div>
+        </section>
 
-      {isReviewer && (
-        <p className="mt-6 rounded-lg bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
-          Reviewers can add new clients and required documents from the client
-          workspace after opening it.
+        <section>
+          <div className="ob-section-heading">
+            <h2>Active engagements</h2>
+            <p>Select a client to review its required documents and complete audit history.</p>
+          </div>
+
+          <div className="ob-client-list">
+            {clients.length === 0 && (
+              <p className="ob-empty">No clients are assigned to you yet.</p>
+            )}
+            {clients.map((client, index) => {
+              const progress = client.total > 0
+                ? Math.round((client.approved / client.total) * 100)
+                : 0;
+              return (
+                <Link
+                  key={client.id}
+                  href={`/clients/${client.id}`}
+                  className="ob-client-row ob-reveal"
+                  style={{ "--delay": `${120 + index * 65}ms` } as React.CSSProperties}
+                >
+                  <span className="ob-client-index">{String(index + 1).padStart(2, "0")}</span>
+                  <h2 className="ob-client-name">{client.name}</h2>
+                  <div className="ob-client-staff">
+                    <span>Assigned staff</span>
+                    {client.staff_name ?? "Unassigned"}
+                  </div>
+                  <div className="ob-client-progress">
+                    <span>Approval</span>
+                    {client.approved}/{client.total}
+                    <div className="ob-progress-line"><i style={{ width: `${progress}%` }} /></div>
+                  </div>
+                  <span className="ob-row-arrow" aria-hidden="true">+</span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+
+        {isReviewer && <CreateClientForm staff={staff} />}
+        <p className="ob-status-legend">
+          Workflow: {Object.values(STATUS_LABELS).join(" / ")}
         </p>
-      )}
-      <p className="mt-4 text-xs text-slate-400">
-        Statuses: {Object.values(STATUS_LABELS).join(" → ")}
-      </p>
-    </main>
+      </main>
+    </div>
   );
 }

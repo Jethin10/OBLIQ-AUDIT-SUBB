@@ -6,9 +6,16 @@ recorded in an append-only audit trail**.
 
 ## Quick start
 
+**Requirements:** Node.js **≥ 23.4** (the built-in `node:sqlite` driver is
+unflagged from 23.4; on Node 22.5–22.x start the server with
+`NODE_OPTIONS=--experimental-sqlite`). No other services, no env files —
+`DATA_DIR` optionally overrides the default `./data` directory.
+
 ```bash
 npm install
-npm run seed     # creates data/audit.db: 2 firms, 4 users, 2 clients, checklists
+npm run seed     # idempotent — safe to re-run. Creates data/audit.db with
+                 # 2 firms, 5 users, 5 clients at different workflow stages,
+                 # real PDF/CSV files and a 2–3 week audit history.
 npm run dev      # http://localhost:3000
 ```
 
@@ -17,9 +24,29 @@ npm run dev      # http://localhost:3000
 | Email | Role | Firm |
 |---|---|---|
 | `rohit@abc.test` | STAFF | ABC & Co. |
+| `vikram@abc.test` | STAFF | ABC & Co. |
 | `aman@abc.test` | REVIEWER | ABC & Co. |
 | `priya@xyz.test` | STAFF | XYZ & Co. |
 | `neha@xyz.test` | REVIEWER | XYZ & Co. |
+
+### Suggested 3-minute tour (the database is pre-loaded)
+
+The seed is a lived-in firm, not an empty checklist — every document below
+already has downloadable files and a full history:
+
+1. Log in as **Aman (reviewer)** → open **Sharma Textiles Pvt. Ltd.** →
+   expand **History** on the Bank Statement. You will see the complete
+   correction loop: upload 10:20 → review started 10:31 → *"Page 3 is
+   missing. Please upload the complete bank statement."* → re-upload with
+   all three pages → approved. Both versions download with distinct bytes.
+2. Same client: the **GST Return** sits in Correction Required with a
+   reconciliation comment, and the **Purchase Register** is mid-review.
+3. Log in as **Neha (reviewer, XYZ & Co.)** → open **XYZ Retail**: an
+   approved statement after a short-month correction, a vendor-invoice
+   correction on the Purchase Register, and a GST Return under review.
+4. Log in as **Rohit (staff)** → open **ABC Traders**: a pristine
+   all-pending checklist — the starting point for performing the workflow
+   yourself (upload → review as Aman → correct → re-upload → approve).
 
 ## The workflow
 
@@ -63,7 +90,12 @@ Three independent layers, each covered by tests:
    document id without re-scoping it to the caller's firm (`lib/clients.ts`,
    `lib/documents.ts`). Firm B users get **404** (existence not disclosed) on all
    Firm A reads, downloads and mutations — asserted in `tests/api.test.mjs`.
-2. **Composite foreign keys** bind every child row to its parent *within the same
+2. **Staff assignment is enforced on reads, not just writes.** `getClientForUser`
+   filters by `assigned_staff_id`, and `getDocumentForUser` / `loadOwnedDocument`
+   return **404** when a staffer probes another client's document — so a direct
+   URL reveals nothing. Covered by the "unassigned same-firm staff" test with
+   two staffers in one firm (Rohit ↔ Vikram).
+3. **Composite foreign keys** bind every child row to its parent *within the same
    firm* (`FOREIGN KEY (firm_id, client_id) REFERENCES clients(firm_id, id)` and
    equivalents). Even a hypothetical missing WHERE clause could not create a
    cross-firm link. `PRAGMA foreign_keys = ON` is set on every connection;
@@ -72,6 +104,37 @@ Three independent layers, each covered by tests:
    their own (role check fires first, leaking nothing); a firm-B *reviewer* — who
    has the permission but not the tenancy — gets **404**. Both cases are asserted,
    demonstrating authentication ≠ authorization and frontend hiding ≠ security.
+
+## Reviewing a document (what the reviewer sees)
+
+Staff upload real files; every upload creates an immutable version row and the
+checklist shows the latest file name (📎 `statement.pdf`). Reviewers get:
+
+- **Open '\<filename\>'** — downloads the latest version via
+  `GET /api/documents/:id/file?version=N` (per-version links too).
+- **History** — expands inline to show every version (file name, size,
+  uploader, timestamp, each with its own download link) plus the
+  document-scoped audit trail (actor, action, version, reason, timestamp).
+- **Start review / Approve / Request correction** — correction requires a
+  reason (frontend + server enforced); stale versions get `409`.
+
+Reviewers can also create clients (client list → "New client", assigned to a
+firm staffer with the default 5-document checklist) and add required documents
+from the workspace ("+ Required document").
+
+## Screenshots
+
+> Screenshots are taken from the local dev server (`npm run seed && npm run dev`).
+> Demo password for all accounts: `DemoAudit!2026`.
+
+| # | View | File |
+|---|---|---|
+| 1 | Login with one-click demo accounts | `docs/screenshots/01-login.png` |
+| 2 | Client list with approval progress + new-client form (reviewer) | `docs/screenshots/02-clients.png` |
+| 3 | Workspace checklist with file names, status badges, upload control | `docs/screenshots/03-workspace.png` |
+| 4 | Reviewer controls + correction comment box | `docs/screenshots/04-review.png` |
+| 5 | Expanded History (versions + per-document audit trail) | `docs/screenshots/05-history.png` |
+| 6 | Recent activity feed (client-level audit trail) | `docs/screenshots/06-activity.png` |
 
 ## Audit trail
 
@@ -90,18 +153,25 @@ Three independent layers, each covered by tests:
 ## Tests
 
 ```bash
-run-tests.cmd                        # kill server → wipe+reseed DB → fresh server →
+run-tests.cmd                        # kill :3000 → wipe+reseed DB → fresh server →
                                      # wait for health → run acceptance suite
-node --test tests/schema.test.mjs    # in-memory tenant-integrity checks
+                                     # (works from any clone path; exits with the
+                                     # suite's own exit code for CI)
+npm test                             # schema (4) + API acceptance (12) suites
+npm run test:schema                  # in-memory tenant-integrity checks
+npm run test:api                     # API suite (needs `npm run dev` running)
 ```
 
-The acceptance suite (`tests/api.test.mjs`, 10 tests) covers: bad credentials;
+The acceptance suite (`tests/api.test.mjs`, 12 tests) covers: bad credentials;
 401 handling; assigned-client scoping; cross-origin rejection; role enforcement
-(staff cannot review, reviewers cannot upload); the full
+(staff cannot review, reviewers cannot upload); reviewer client creation with
+the default checklist; the full
 upload → review → correction → re-upload → approve loop; stale-version (409) and
 approved-document immutability; exact audit-event ordering with actors, versions
-and reasons; versioned downloads with distinct bytes; cross-tenant 404 on read
-and all four mutation paths; and logout invalidation. **Current status: 10/10.**
+and reasons; file-name metadata in list + detail responses; versioned downloads
+with distinct bytes; same-firm unassigned-staff 404 on read/download/upload;
+cross-tenant 404 on read and all four mutation paths; and logout invalidation.
+**Current status: 12/12.**
 
 ## Design decisions worth calling out
 
@@ -150,9 +220,18 @@ after the trust and accountability core is solid.
 
 ## AI Tools Used
 
-- **Cline (Claude):** pair-programmed the full implementation — scaffolding,
-  schema, API, UI, tests, and this README. Debugging was driven by real evidence
-  (server logs, failing tests), not assumptions.
+ChatGPT: not used.
+Claude: pair-programmed the full implementation via Cline — scaffolding,
+schema, API, UI, tests, and this README. Debugging was driven by real
+evidence (server logs, failing tests), not assumptions.
+Gemini: not used.
+Cursor: not used.
+GitHub Copilot: not used.
+Other (Muse Spark): post-review hardening pass — reviewer file open/download +
+History panel, same-firm read authorization fix, idempotent lived-in reseed
+(real PDF/CSV files, multi-week audit history), `npm test` scripts,
+client-creation UI, lint/consistency cleanup, and the extra same-firm +
+file-metadata acceptance tests.
 
 **How AI was used:** as an implementation accelerator under my direction. I can
 explain every part of the system: the transition table, composite-FK tenant

@@ -1,12 +1,11 @@
 import { NextRequest } from "next/server";
-import { handleApiError } from "@/lib/errors";
+import { handleApiError, ApiError } from "@/lib/errors";
 import { getSessionUser } from "@/lib/auth";
 import { json, requirePermission, requireUser } from "@/lib/http";
-import { ApiError } from "@/lib/errors";
 import { queryOne, runInsert, transaction } from "@/lib/db";
 import { recordAudit } from "@/lib/audit";
 import { getClientForUser } from "@/lib/clients";
-import { parseJsonBody, requireInt, requireSameOrigin, requireString } from "@/lib/validation";
+import { parseJsonBody, requireSameOrigin, requireString } from "@/lib/validation";
 
 export async function POST(
   request: NextRequest,

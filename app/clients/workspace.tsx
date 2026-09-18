@@ -12,9 +12,18 @@ export interface UiDocument {
   uploaded_at: string | null;
   uploader_name: string | null;
   correction_comment: string | null;
+  file_name: string | null;
 }
 
-export interface UiEvent {
+export interface UiVersion {
+  version: number;
+  file_name: string;
+  file_size: number;
+  uploaded_at: string;
+  uploader_name: string;
+}
+
+export interface UiDocEvent {
   id: number;
   actor_name: string;
   actor_role: string;
@@ -22,6 +31,9 @@ export interface UiEvent {
   version: number | null;
   detail: string | null;
   created_at: string;
+}
+
+export interface UiEvent extends UiDocEvent {
   document_id: number | null;
 }
 
@@ -35,6 +47,7 @@ interface Props {
 
 export function ClientWorkspace({
   clientId,
+  clientName,
   documents: initialDocs,
   events: initialEvents,
   role,
@@ -45,9 +58,33 @@ export function ClientWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
+  const [histories, setHistories] = useState<Record<number, { versions: UiVersion[]; events: UiDocEvent[] }>>({});
+  const [historyLoading, setHistoryLoading] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [newDocName, setNewDocName] = useState("");
   const router = useRouter();
+
+  async function toggleHistory(docId: number | null) {
+    if (docId === null || openId === docId) {
+      setOpenId(null);
+      return;
+    }
+    setOpenId(docId);
+    if (histories[docId]) return;
+    setHistoryLoading(docId);
+    try {
+      const res = await fetch(`/api/documents/${docId}`);
+      if (res.ok) {
+        const body = await res.json();
+        setHistories((previous) => ({
+          ...previous,
+          [docId]: { versions: body.versions ?? [], events: body.events ?? [] },
+        }));
+      }
+    } finally {
+      setHistoryLoading((current) => current === docId ? null : current);
+    }
+  }
 
   function flash(message: string) {
     setNotice(message);
@@ -80,7 +117,7 @@ export function ClientWorkspace({
         setError(body.error ?? `Upload failed (${res.status})`);
         return;
       }
-      flash(`Uploaded '${file.name}' — awaiting review.`);
+      flash(`Uploaded '${file.name}'. It is ready for review.`);
       await refresh();
     } catch {
       setError("Network error during upload");
@@ -104,9 +141,12 @@ export function ClientWorkspace({
         return;
       }
       setComment("");
-      flash(
-        action === "APPROVE" ? "Document approved." : action === "START_REVIEW" ? "Review started." : "Correction requested."
-      );
+      setHistories((previous) => {
+        const next = { ...previous };
+        delete next[doc.id];
+        return next;
+      });
+      flash(action === "APPROVE" ? "Document approved." : action === "START_REVIEW" ? "Review started." : "Correction requested.");
       await refresh();
     } catch {
       setError("Network error during review");
@@ -120,91 +160,88 @@ export function ClientWorkspace({
     if (!name) return;
     setBusy(true);
     setError(null);
-    const res = await fetch(`/api/clients/${clientId}/documents`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Could not add document");
-      return;
+    try {
+      const res = await fetch(`/api/clients/${clientId}/documents`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Could not add document");
+        return;
+      }
+      setNewDocName("");
+      flash("Required document added.");
+      await refresh();
+    } catch {
+      setError("Network error while adding the document");
+    } finally {
+      setBusy(false);
     }
-    setNewDocName("");
-    flash("Required document added.");
-    await refresh();
   }
 
   return (
-    <div className="space-y-6">
-      {error && (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
-          {error}
-        </p>
-      )}
-      {notice && (
-        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-emerald-200">
-          {notice}
-        </p>
-      )}
+    <div>
+      {error && <p className="ob-error">{error}</p>}
+      {notice && <p className="ob-notice">{notice}</p>}
 
-      <section>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Documents</h2>
+      <section aria-labelledby="documents-heading">
+        <div className="ob-workspace-summary">
+          <h2 id="documents-heading">Required documents / {clientName}</h2>
           {role === "REVIEWER" && (
-            <div className="flex gap-2">
+            <div className="ob-add-document">
               <input
                 value={newDocName}
-                onChange={(e) => setNewDocName(e.target.value)}
-                placeholder="New required document…"
-                className="w-48 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+                onChange={(event) => setNewDocName(event.target.value)}
+                placeholder="Add a required document"
+                className="ob-input"
+                aria-label="New required document"
               />
               <button
                 type="button"
                 disabled={busy || !newDocName.trim()}
                 onClick={addDocument}
-                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="ob-primary-button"
               >
-                Add
+                Add requirement
               </button>
             </div>
           )}
         </div>
 
-        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+        <div className="ob-document-wrap">
+          <table className="ob-document-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3">Document</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Version</th>
-                <th className="px-4 py-3">Uploaded</th>
-                <th className="px-4 py-3">Actions</th>
+                <th>Document</th>
+                <th>Status</th>
+                <th>Version</th>
+                <th>Last upload</th>
+                <th>Review controls</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {docs.map((doc) => (
-                <tr key={doc.id} className="align-top">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{doc.doc_type}</p>
+            <tbody>
+              {docs.map((doc, index) => (
+                <tr key={doc.id} className="ob-reveal" style={{ "--delay": `${index * 55}ms` } as React.CSSProperties}>
+                  <td>
+                    <p className="ob-doc-name">{doc.doc_type}</p>
+                    {doc.file_name && <p className="ob-doc-file" title={doc.file_name}>File / {doc.file_name}</p>}
                     {doc.status === "CORRECTION_REQUIRED" && doc.correction_comment && (
-                      <p className="mt-1 max-w-md rounded bg-red-50 px-2 py-1 text-xs text-red-700">
-                        {doc.correction_comment}
-                      </p>
+                      <p className="ob-correction">{doc.correction_comment}</p>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${STATUS_BADGE[doc.status] ?? "bg-slate-100 text-slate-600 ring-slate-200"}`}>
+                  <td>
+                    <span className={`ob-status ${doc.status.toLowerCase()}`}>
                       {STATUS_LABELS[doc.status] ?? doc.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">v{doc.version}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500">
-                    {doc.uploader_name ?? "—"}
+                  <td className="ob-doc-meta">v{doc.version}</td>
+                  <td className="ob-doc-meta">
+                    {doc.uploader_name ?? "No upload"}
                     {doc.uploaded_at && <><br />{formatDateTime(doc.uploaded_at)}</>}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <DocActions
                       doc={doc}
                       role={role}
@@ -214,7 +251,9 @@ export function ClientWorkspace({
                       onUpload={upload}
                       onReview={review}
                       openId={openId}
-                      setOpenId={setOpenId}
+                      setOpenId={toggleHistory}
+                      history={histories[doc.id] ?? null}
+                      historyLoading={historyLoading === doc.id}
                     />
                   </td>
                 </tr>
@@ -239,6 +278,8 @@ function DocActions({
   onReview,
   openId,
   setOpenId,
+  history,
+  historyLoading,
 }: {
   doc: UiDocument;
   role: "STAFF" | "REVIEWER";
@@ -248,74 +289,112 @@ function DocActions({
   onUpload: (doc: UiDocument, file: File) => void;
   onReview: (doc: UiDocument, action: string) => void;
   openId: number | null;
-  setOpenId: (id: number | null) => void;
+  setOpenId: (docId: number | null) => void;
+  history: { versions: UiVersion[]; events: UiDocEvent[] } | null;
+  historyLoading: boolean;
 }) {
+  const open = openId === doc.id;
+
   return (
-    <div>
-      <div className="flex flex-wrap gap-2">
+    <div className="ob-action-stack">
+      <div className="ob-action-row">
         {role === "STAFF" && ["PENDING", "CORRECTION_REQUIRED"].includes(doc.status) && (
-          <label className={`cursor-pointer rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 ${busy ? "pointer-events-none opacity-50" : ""}`}>
-            {doc.status === "CORRECTION_REQUIRED" ? "Re-upload" : "Upload"}
+          <label className="ob-file-button">
+            {doc.status === "CORRECTION_REQUIRED" ? "Upload revision" : "Upload file"}
             <input
               type="file"
-              className="hidden"
+              hidden
+              disabled={busy}
               accept=".pdf,.png,.jpg,.jpeg,.csv,.xls,.xlsx"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
+              onChange={(event) => {
+                const file = event.target.files?.[0];
                 if (file) onUpload(doc, file);
-                e.target.value = "";
+                event.target.value = "";
               }}
             />
           </label>
         )}
         {doc.version > 0 && (
-          <button
-            type="button"
-            onClick={() => setOpenId(openId === doc.id ? null : doc.id)}
-            className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          <a
+            href={`/api/documents/${doc.id}/file?version=${doc.version}`}
+            className="ob-file-button"
+            title={doc.file_name ? `Open '${doc.file_name}'` : "Open latest uploaded file"}
           >
-            {openId === doc.id ? "Close" : "History"}
+            Open file
+          </a>
+        )}
+        {doc.version > 0 && (
+          <button type="button" onClick={() => setOpenId(open ? null : doc.id)} className="ob-text-button">
+            {open ? "Close history" : "History"}
           </button>
         )}
       </div>
 
       {role === "REVIEWER" && ["UPLOADED", "UNDER_REVIEW"].includes(doc.status) && (
-        <div className="mt-2">
+        <div className="ob-review-box">
           {doc.status === "UPLOADED" && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onReview(doc, "START_REVIEW")}
-              className="mb-2 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
-            >
+            <button type="button" disabled={busy} onClick={() => onReview(doc, "START_REVIEW")} className="ob-primary-button">
               Start review
             </button>
           )}
           <input
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Review comment (required for correction)…"
-            className="mb-2 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs focus:border-indigo-500 focus:outline-none"
+            onChange={(event) => setComment(event.target.value)}
+            placeholder="Review note. Required for correction."
+            className="ob-input"
+            aria-label={`Review note for ${doc.doc_type}`}
           />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onReview(doc, "APPROVE")}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
+          <div className="ob-review-actions">
+            <button type="button" disabled={busy} onClick={() => onReview(doc, "APPROVE")} className="ob-primary-button ob-approve">
               Approve
             </button>
             <button
               type="button"
               disabled={busy || !comment.trim()}
               onClick={() => onReview(doc, "REQUEST_CORRECTION")}
-              title="A correction reason is required"
-              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              className="ob-primary-button ob-correct"
             >
               Request correction
             </button>
           </div>
+        </div>
+      )}
+
+      {open && (
+        <div className="ob-history">
+          {historyLoading ? (
+            <p>Loading version history...</p>
+          ) : !history ? (
+            <p>History could not be loaded.</p>
+          ) : (
+            <>
+              <p className="ob-history-title">{history.versions.length} version{history.versions.length === 1 ? "" : "s"}</p>
+              <ul className="ob-history-list">
+                {history.versions.map((version) => (
+                  <li key={version.version}>
+                    <strong>v{version.version}</strong>
+                    <span>
+                      <a href={`/api/documents/${doc.id}/file?version=${version.version}`}>{version.file_name}</a>
+                      <span className="ob-history-sub">{(version.file_size / 1024).toFixed(1)} KB / {version.uploader_name} / {formatDateTime(version.uploaded_at)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {history.events.length > 0 && (
+                <ol className="ob-history-events">
+                  {history.events.map((event) => (
+                    <li key={event.id}>
+                      <span>{event.version === null ? "-" : `v${event.version}`}</span>
+                      <span>
+                        <strong>{event.actor_name}</strong> / {ACTION_LABELS[event.action] ?? event.action}
+                        {event.detail && <span className="ob-history-sub">{event.detail}</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -324,58 +403,29 @@ function DocActions({
 
 function Timeline({ events }: { events: UiEvent[] }) {
   return (
-    <section>
-      <h2 className="text-lg font-semibold text-slate-900">Recent activity</h2>
-      <ol className="mt-3 space-y-3">
-        {events.length === 0 && (
-          <li className="text-sm text-slate-500">No activity yet.</li>
-        )}
-        {events.map((event) => (
-          <li
-            key={event.id}
-            className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm"
-          >
-            <span className="text-lg" aria-hidden>
-              {ACTION_ICONS[event.action] ?? "•"}
+    <section className="ob-activity">
+      <div className="ob-activity-head">
+        <h2>Audit history</h2>
+        <p>Every material action, in order.</p>
+      </div>
+      <ol className="ob-timeline">
+        {events.length === 0 && <li><span /><span>No activity yet.</span></li>}
+        {events.map((event, index) => (
+          <li key={event.id}>
+            <span className="ob-event-index">{String(events.length - index).padStart(2, "0")}</span>
+            <span>
+              <span className="ob-event-name">{event.actor_name}</span><br />
+              <span className="ob-event-role">{event.actor_role.toLowerCase()}</span>
             </span>
-            <div className="flex-1">
-              <p className="text-sm text-slate-800">
-                <span className="font-medium">{event.actor_name}</span>{" "}
-                <span className="text-slate-500">({event.actor_role.toLowerCase()})</span>{" "}
-                {ACTION_LABELS[event.action] ?? event.action}
-                {event.version !== null && (
-                  <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
-                    v{event.version}
-                  </span>
-                )}
-              </p>
-              {event.detail && (
-                <p className="mt-0.5 text-sm text-slate-500">{event.detail}</p>
-              )}
-            </div>
-            <time className="whitespace-nowrap text-xs text-slate-400">
-              {formatDateTime(event.created_at)}
-            </time>
+            <span className="ob-event-action">
+              {ACTION_LABELS[event.action] ?? event.action}
+              {event.version !== null && ` / v${event.version}`}
+              {event.detail && <span className="ob-event-detail">{event.detail}</span>}
+            </span>
+            <time className="ob-event-time">{formatDateTime(event.created_at)}</time>
           </li>
         ))}
       </ol>
     </section>
   );
 }
-
-const ACTION_ICONS: Record<string, string> = {
-  CLIENT_CREATED: "🏢",
-  DOCUMENT_REQUIRED: "📋",
-  DOCUMENT_UPLOADED: "📤",
-  REVIEW_STARTED: "👀",
-  DOCUMENT_APPROVED: "✅",
-  CORRECTION_REQUESTED: "✏️",
-};
-
-const STATUS_BADGE: Record<string, string> = {
-  PENDING: "bg-slate-100 text-slate-600 ring-slate-200",
-  UPLOADED: "bg-blue-50 text-blue-700 ring-blue-200",
-  UNDER_REVIEW: "bg-amber-50 text-amber-700 ring-amber-200",
-  APPROVED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  CORRECTION_REQUIRED: "bg-red-50 text-red-700 ring-red-200",
-};
