@@ -1,0 +1,15 @@
+import { readFileSync } from "node:fs";
+const s = readFileSync("app/landing-content.ts","utf8");
+const mediaRefs = [...s.matchAll(/\/landing\/media\/[\w.\-]+/g)].map(m=>m[0]);
+console.log("MEDIA REFS:", [...new Set(mediaRefs)].join("\n"));
+console.log("---EXTERNAL URLS---");
+const ext = [...s.matchAll(/https?:\/\/[^\\"]+/g)].map(m=>m[0]);
+console.log([...new Set(ext)].slice(0,50).join("\n"));
+console.log("---IMG TAGS---");
+const imgs = [...s.matchAll(/<img[^>]{0,400}/g)].map(m=>m[0].slice(0,400));
+imgs.forEach((t,i)=>console.log(i+": "+t+"\n"));
+console.log("---VIDEO---");
+const vids = [...s.matchAll(/<video[^>]{0,500}/g)].map(m=>m[0].slice(0,500));
+vids.forEach((t,i)=>console.log(i+": "+t+"\n"));
+const srcs = [...s.matchAll(/source[^>]{0,300}/g)].map(m=>m[0].slice(0,300));
+srcs.forEach((t,i)=>console.log("src "+i+": "+t+"\n"));

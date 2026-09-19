@@ -1,12 +1,12 @@
 @echo off
 rem Deterministic test cycle: stop server, wipe data files, reseed once,
-rem start a fresh server, wait for health, run the acceptance suite.
+rem start a fresh isolated server, wait for health, run the acceptance suite,
+rem and stop the server even when the suite fails.
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d %~dp0
 
 rem --- 1. stop whatever listens on 3000 (only that process) ---
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
-timeout /t 1 /nobreak >nul
 
 rem --- 2. wipe the database files outright (server is dead now, safe) ---
 del /q data\audit.db data\audit.db-wal data\audit.db-shm >nul 2>&1
@@ -20,6 +20,7 @@ if errorlevel 1 (
 )
 
 rem --- 4. start a fresh dev server ---
+set NEXT_DIST_DIR=.next-test
 start "" /b node node_modules\next\dist\bin\next dev > dev-server.log 2>&1
 
 rem --- 5. wait until it actually answers ---
@@ -27,6 +28,7 @@ node scripts\wait-health.mjs > health.log 2>&1
 if errorlevel 1 (
   echo SERVER_TIMEOUT > test-exit.txt
   type health.log
+  for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
   exit /b 1
 )
 
@@ -35,5 +37,6 @@ node --test tests\api.test.mjs > test-out.log 2>&1
 set TEST_EXIT=!errorlevel!
 echo EXIT:!TEST_EXIT! > test-exit.txt
 type test-out.log
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
 exit /b !TEST_EXIT!
 

@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS documents (
   reviewed_at TEXT,
   assigned_reviewer_id INTEGER REFERENCES users(id),
   correction_comment TEXT,
+  -- Optional ISO date (YYYY-MM-DD). NULL means the document has no deadline.
+  -- Due dates drive the "needs attention" view; overdue = due_date < today and
+  -- the document is not yet approved.
+  due_date TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (firm_id, client_id) REFERENCES clients(firm_id, id),
   UNIQUE (firm_id, id)
@@ -78,6 +82,18 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id INTEGER NOT NULL REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at TEXT NOT NULL
+);
+
+-- Enquiries from the public landing page, written by /api/landing/[kind].
+-- They belong to nobody yet, so unlike every table above they carry no
+-- firm scope and are never read by the workspace.
+CREATE TABLE IF NOT EXISTS landing_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL CHECK (kind IN ('contact', 'subscribe')),
+  name TEXT,
+  email TEXT NOT NULL,
+  message TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS document_versions (

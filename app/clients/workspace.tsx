@@ -13,6 +13,7 @@ export interface UiDocument {
   uploader_name: string | null;
   correction_comment: string | null;
   file_name: string | null;
+  due_date: string | null;
 }
 
 export interface UiVersion {
@@ -62,7 +63,16 @@ export function ClientWorkspace({
   const [historyLoading, setHistoryLoading] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [newDocName, setNewDocName] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const router = useRouter();
+
+  const visibleDocs = statusFilter === "ALL"
+    ? docs
+    : docs.filter((doc) => doc.status === statusFilter);
+  const statusCounts = docs.reduce<Record<string, number>>((acc, doc) => {
+    acc[doc.status] = (acc[doc.status] ?? 0) + 1;
+    return acc;
+  }, {});
 
   async function toggleHistory(docId: number | null) {
     if (docId === null || openId === docId) {
@@ -155,6 +165,29 @@ export function ClientWorkspace({
     }
   }
 
+  async function setDueDate(doc: UiDocument, value: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/due-date`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dueDate: value || null }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? `Could not set due date (${res.status})`);
+        return;
+      }
+      flash(value ? `Due date set to ${value}.` : "Due date cleared.");
+      await refresh();
+    } catch {
+      setError("Network error while setting the due date");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function addDocument() {
     const name = newDocName.trim();
     if (!name) return;
@@ -189,6 +222,24 @@ export function ClientWorkspace({
       <section aria-labelledby="documents-heading">
         <div className="ob-workspace-summary">
           <h2 id="documents-heading">Required documents / {clientName}</h2>
+          <div className="ob-filter-bar" role="tablist" aria-label="Filter by status">
+            {["ALL", "PENDING", "UPLOADED", "UNDER_REVIEW", "CORRECTION_REQUIRED", "APPROVED"].map((status) => {
+              const count = status === "ALL" ? docs.length : (statusCounts[status] ?? 0);
+              if (status !== "ALL" && count === 0) return null;
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setStatusFilter(status)}
+                  className={`ob-filter-chip ${statusFilter === status ? "is-on" : ""}`}
+                  aria-pressed={statusFilter === status}
+                >
+                  {status === "ALL" ? "All" : (STATUS_LABELS[status] ?? status)}
+                  <span className="ob-filter-count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
           {role === "REVIEWER" && (
             <div className="ob-add-document">
               <input
@@ -216,13 +267,18 @@ export function ClientWorkspace({
               <tr>
                 <th>Document</th>
                 <th>Status</th>
-                <th>Version</th>
+                <th>Due</th>
                 <th>Last upload</th>
                 <th>Review controls</th>
               </tr>
             </thead>
             <tbody>
-              {docs.map((doc, index) => (
+              {visibleDocs.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="ob-empty">No documents in this state.</td>
+                </tr>
+              )}
+              {visibleDocs.map((doc, index) => (
                 <tr key={doc.id} className="ob-reveal" style={{ "--delay": `${index * 55}ms` } as React.CSSProperties}>
                   <td>
                     <p className="ob-doc-name">{doc.doc_type}</p>
@@ -236,10 +292,18 @@ export function ClientWorkspace({
                       {STATUS_LABELS[doc.status] ?? doc.status}
                     </span>
                   </td>
-                  <td className="ob-doc-meta">v{doc.version}</td>
+                  <td className="ob-doc-meta">
+                    <DueCell
+                      doc={doc}
+                      canEdit={role === "REVIEWER"}
+                      busy={busy}
+                      onSet={setDueDate}
+                    />
+                  </td>
                   <td className="ob-doc-meta">
                     {doc.uploader_name ?? "No upload"}
                     {doc.uploaded_at && <><br />{formatDateTime(doc.uploaded_at)}</>}
+                    <span className="ob-version-tag">v{doc.version}</span>
                   </td>
                   <td>
                     <DocActions
@@ -263,8 +327,46 @@ export function ClientWorkspace({
         </div>
       </section>
 
-      <Timeline events={events} />
+      <Timeline events={events} clientId={clientId} />
     </div>
+  );
+}
+
+function DueCell({
+  doc,
+  canEdit,
+  busy,
+  onSet,
+}: {
+  doc: UiDocument;
+  canEdit: boolean;
+  busy: boolean;
+  onSet: (doc: UiDocument, value: string) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = doc.status !== "APPROVED" && doc.due_date !== null && doc.due_date < today;
+
+  if (canEdit) {
+    return (
+      <label className={`ob-due ${overdue ? "is-overdue" : ""}`}>
+        <input
+          type="date"
+          className="ob-due-input"
+          defaultValue={doc.due_date ?? ""}
+          disabled={busy}
+          onChange={(event) => onSet(doc, event.target.value)}
+          aria-label={`Due date for ${doc.doc_type}`}
+        />
+        {overdue && <span className="ob-due-flag">Overdue</span>}
+      </label>
+    );
+  }
+  if (!doc.due_date) return <span className="ob-due-none">—</span>;
+  return (
+    <span className={`ob-due-text ${overdue ? "is-overdue" : ""}`}>
+      {doc.due_date}
+      {overdue && <span className="ob-due-flag">Overdue</span>}
+    </span>
   );
 }
 
@@ -401,12 +503,21 @@ function DocActions({
   );
 }
 
-function Timeline({ events }: { events: UiEvent[] }) {
+function Timeline({ events, clientId }: { events: UiEvent[]; clientId: number }) {
   return (
     <section className="ob-activity">
-      <div className="ob-activity-head">
-        <h2>Audit history</h2>
-        <p>Every material action, in order.</p>
+      <div className="ob-activity-head ob-activity-head--row">
+        <div>
+          <h2>Audit history</h2>
+          <p>Every material action, in order.</p>
+        </div>
+        <a
+          href={`/api/clients/${clientId}/export`}
+          className="ob-outline-button ob-export"
+          download
+        >
+          Export trail (CSV)
+        </a>
       </div>
       <ol className="ob-timeline">
         {events.length === 0 && <li><span /><span>No activity yet.</span></li>}

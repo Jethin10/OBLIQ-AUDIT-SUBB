@@ -53,6 +53,27 @@ export function requireString(
   return trimmed;
 }
 
+/**
+ * Validates an optional ISO calendar date (YYYY-MM-DD). Returns the normalized
+ * date string, or null when the input is empty/absent (used to clear a date).
+ */
+export function optionalDate(value: unknown, field: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") {
+    throw new ApiError(400, `Field '${field}' must be a date string`);
+  }
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw new ApiError(400, `Field '${field}' must be a YYYY-MM-DD date`);
+  }
+  const date = new Date(`${trimmed}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== trimmed) {
+    throw new ApiError(400, `Field '${field}' is not a valid calendar date`);
+  }
+  return trimmed;
+}
+
 export function requireInt(value: unknown, field: string): number {
   if (typeof value === "number" && Number.isInteger(value)) return value;
   if (typeof value === "string" && /^-?\d+$/.test(value.trim())) {

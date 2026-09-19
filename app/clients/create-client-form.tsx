@@ -52,7 +52,7 @@ export function CreateClientForm({ staff }: { staff: { id: number; name: string 
       className="ob-create-panel"
     >
       <div>
-        <h2>New<br />client</h2>
+        <h2>New client</h2>
         <p className="ob-create-copy">Create an engagement with the standard five-document audit checklist.</p>
       </div>
       <div className="ob-create-form">

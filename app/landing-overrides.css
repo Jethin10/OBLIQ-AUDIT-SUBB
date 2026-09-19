@@ -1,0 +1,304 @@
+/**
+ * Where OBLIQ's port deliberately steps outside the reference theme.
+ * Everything else lives in the generated app/landing.css and is driven by
+ * the theme's own animation bundle (see app/landing-shell.tsx). Rules here
+ * must never override the runtime's transforms while it is active: anything
+ * that forces content visible is scoped to html.obliq-no-motion (bundle
+ * failed or reduced motion) so the preloader, line reveals, pinned hero, 3D
+ * workflow cube, cursor and menu keep working as they do on the reference.
+ */
+
+/**
+ * 1. The reference puts its top-level sections straight on <body>
+ *    (`body>section{width:100vw}`). React renders them inside the page's own
+ *    wrapper, so the same rule is re-stated one level down.
+ */
+html.obliq-landing body > div > section {
+  width: 100vw !important;
+}
+
+/**
+ * 2. The theme's bundler emits "OBLIQ AUDIT" wider than the viewport it
+ *    leaves for it, so the footer sign is scaled to fill the line like the
+ *    reference's own two-word sign does.
+ */
+html.obliq-landing footer .sign {
+  font-size: 13em;
+}
+
+/**
+ * 3. The theme reveals #prldr from JavaScript. Showing it from the first
+ *    paint hides the bundle download behind the black panel, and the bundle's
+ *    own inline styles take over as soon as it runs. If it never runs, the
+ *    shell flags the page and this block gets out of the way.
+ */
+html.obliq-landing.obliq-no-motion #prldr,
+html.obliq-landing.obliq-no-motion #pg-prldr,
+html.obliq-landing.obliq-no-motion #prldr-int {
+  display: none;
+}
+
+html.obliq-landing.obliq-no-motion .hi {
+  visibility: visible;
+}
+
+html.obliq-landing.obliq-no-motion .crs-wr {
+  display: none;
+}
+
+html.obliq-landing.obliq-no-motion.obliq-menu-open #mn {
+  transform: translateY(0) !important;
+}
+
+html.obliq-landing.obliq-no-motion.obliq-menu-open header .brg-btn span:first-child {
+  transform: translateY(7px) rotate(45deg);
+}
+
+html.obliq-landing.obliq-no-motion.obliq-menu-open header .brg-btn span:nth-child(2) {
+  opacity: 0;
+}
+
+html.obliq-landing.obliq-no-motion.obliq-menu-open header .brg-btn span:last-child {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+html.obliq-landing header .brg-btn span {
+  transition: transform 0.3s ease, opacity 0.2s ease;
+}
+
+html.obliq-landing:not(.obliq-runtime) #mn {
+  transition: transform 0.45s cubic-bezier(0.33, 0, 0.18, 1);
+}
+
+html.obliq-landing #acpt-policy {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+html.obliq-landing #acpt-policy.is-dismissed {
+  transform: translateY(110%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.obliq-landing.obliq-menu-open #acpt-policy {
+  transform: translateY(110%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.obliq-landing.obliq-no-motion [data-ia],
+html.obliq-landing.obliq-no-motion [data-sa] {
+  transform: none !important;
+  opacity: 1 !important;
+  will-change: auto !important;
+}
+
+html.obliq-landing main > section:not(#hm-in),
+html.obliq-landing footer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}
+
+/* Controls ("Trust"): the reference presents the seventeen assurances as a
+   scroll-scrubbed 3D ring. Scrubbing freezes them mid-rotation, clipped and
+   foreshortened, which reads as a glitch. Present them as a calm, readable
+   grid instead - same copy, same count, none of the motion sickness. */
+html.obliq-landing #hm-rcgnt {
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 9vw 0 7vw;
+}
+
+html.obliq-landing #hm-rcgnt .c-lg { height: auto !important; }
+
+html.obliq-landing #hm-rcgnt h2 { text-align: left; margin-bottom: 4vw; }
+
+html.obliq-landing #hm-rcgnt .awrds,
+html.obliq-landing #hm-rcgnt .awrds .lst,
+html.obliq-landing #hm-rcgnt .awrds .awrd {
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+html.obliq-landing #hm-rcgnt .awrds { height: auto !important; perspective: none !important; }
+html.obliq-landing #hm-rcgnt .awrds .curr,
+html.obliq-landing #hm-rcgnt .awrds .pls-icn { display: none !important; }
+
+html.obliq-landing #hm-rcgnt .awrds .lst {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  height: auto !important;
+  background: rgba(255, 255, 255, 0.14);
+  transform-style: flat !important;
+}
+
+html.obliq-landing #hm-rcgnt .awrds .awrd {
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  left: auto !important;
+  width: 100% !important;
+  min-height: 9vw;
+  padding: 1.6vw 1.5vw !important;
+  background: #020202;
+  backface-visibility: visible !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.4vw;
+}
+
+html.obliq-landing #hm-rcgnt .awrds .awrd a {
+  position: static !important;
+  transform: none !important;
+  opacity: 1 !important;
+  font-size: 1.06vw;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+html.obliq-landing #hm-rcgnt .awrds .awrd .year {
+  position: static !important;
+  opacity: 1 !important;
+  transform: none !important;
+  font-size: 0.72vw;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+@media (max-width: 739px) {
+  html.obliq-landing #hm-rcgnt .awrds .lst { grid-template-columns: 1fr; }
+  html.obliq-landing #hm-rcgnt .awrds .awrd { min-height: 0; padding: 20px !important; }
+  html.obliq-landing #hm-rcgnt .awrds .awrd a { font-size: 17px; }
+  html.obliq-landing #hm-rcgnt .awrds .awrd .year { font-size: 11px; }
+}
+
+/* No-motion fallback: the reference presents workflow cards as a script-driven
+   3D carousel. Park them as a stable grid with the same cards and typography
+   instead of stacking every slide in one layer. */
+html.obliq-landing.obliq-no-motion #hm-prcts {
+  padding-top: 8vw;
+  padding-bottom: 8vw;
+}
+
+html.obliq-landing.obliq-no-motion #hm-prcts .crds {
+  display: block;
+  width: calc(100% - 2.78vw);
+  margin-top: 7vw;
+}
+
+html.obliq-landing.obliq-no-motion #hm-prcts .cb-3d.-l {
+  width: 100%;
+}
+
+html.obliq-landing.obliq-no-motion #hm-prcts .cb-3d.-l > .wrp {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: #020202;
+  transform: none !important;
+}
+
+html.obliq-landing.obliq-no-motion #hm-prcts .cb-3d.-l > .wrp > .prct-crd {
+  position: relative !important;
+  inset: auto !important;
+  min-height: 34vw;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+html.obliq-landing.obliq-no-motion #hm-prcts .cb-3d.-l > .wrp > .prct-crd > .mr-crd,
+html.obliq-landing.obliq-no-motion #hm-prcts .cb-3d.-l > .wrp > .prct-crd:last-child,
+html.obliq-landing.obliq-no-motion #hm-prcts .cb-3d.-r {
+  display: none !important;
+}
+
+html.obliq-landing:not(.obliq-runtime):not(.obliq-no-motion) #hm-in .cntnt,
+html.obliq-landing:not(.obliq-runtime):not(.obliq-no-motion) #hm-in .bnr,
+html.obliq-landing:not(.obliq-runtime):not(.obliq-no-motion) header {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+html.obliq-landing.obliq-no-motion #hm-in .cntnt,
+html.obliq-landing.obliq-no-motion #hm-in .bnr,
+html.obliq-landing.obliq-no-motion header {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.33, 0, 0.18, 1);
+}
+
+html.obliq-landing.obliq-no-motion #hm-in .bnr {
+  transition-delay: 80ms;
+}
+
+/* Tailwind also owns a `.w-5` utility. Keep the reference theme's semantic
+   width on the hero, especially on narrow screens where 1.25rem is unusable. */
+html.obliq-landing #hm-in .cntnt {
+  width: 39.7vw;
+}
+
+@media (max-width: 739px) {
+  html.obliq-landing #hm-in .cntnt {
+    width: calc(100vw - 40px);
+    margin-left: 0;
+  }
+
+  html.obliq-landing.obliq-no-motion #hm-prcts {
+    padding-top: 88px;
+    padding-bottom: 88px;
+  }
+
+  html.obliq-landing.obliq-no-motion #hm-prcts .lt {
+    display: block;
+  }
+
+  html.obliq-landing.obliq-no-motion #hm-prcts .lt .txt,
+  html.obliq-landing.obliq-no-motion #hm-prcts .lt .hnt {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  html.obliq-landing.obliq-no-motion #hm-prcts .lt .hnt {
+    margin-top: 24px;
+  }
+
+  html.obliq-landing.obliq-no-motion #hm-prcts .crds {
+    width: calc(100% - 40px);
+    margin-top: 48px;
+  }
+
+  html.obliq-landing.obliq-no-motion #hm-prcts .cb-3d.-l > .wrp {
+    grid-template-columns: 1fr;
+  }
+
+  html.obliq-landing.obliq-no-motion #hm-prcts .cb-3d.-l > .wrp > .prct-crd {
+    min-height: 340px;
+  }
+}
+
+@media (max-width: 1100px) {
+  html.obliq-landing.obliq-no-motion .crs-wr {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.obliq-landing.obliq-no-motion *,
+  html.obliq-landing.obliq-no-motion *::before,
+  html.obliq-landing.obliq-no-motion *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  html.obliq-landing.obliq-no-motion #hm-in .cntnt,
+  html.obliq-landing.obliq-no-motion #hm-in .bnr,
+  html.obliq-landing header {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "node scripts/run-next.mjs build",
+    "start": "node scripts/run-next.mjs start",
     "seed": "node scripts/seed.mjs",
     "lint": "eslint .",
     "test": "node --test tests/api.test.mjs tests/schema.test.mjs",
     "test:schema": "node --test tests/schema.test.mjs",
-    "test:api": "node --test tests/api.test.mjs"
+    "test:api": "node --test tests/api.test.mjs",
+    "test:smoke": "node scripts/smoke-ui.mjs",
+    "test:perf": "node scripts/landing-perf-smoke.mjs"
   },
   "dependencies": {
     "next": "^15.1.0",
@@ -23,8 +25,11 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "css-tree": "^3.2.1",
     "eslint": "^9",
     "eslint-config-next": "^15.1.0",
+    "node-html-parser": "^9.0.4",
+    "opentype.js": "^2.0.0",
     "postcss": "^8",
     "tailwindcss": "^4",
     "typescript": "^5"

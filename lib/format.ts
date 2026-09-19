@@ -20,6 +20,7 @@ export const ACTION_LABELS: Record<string, string> = {
   REVIEW_STARTED: "Review started",
   DOCUMENT_APPROVED: "Approved",
   CORRECTION_REQUESTED: "Correction requested",
+  DUE_DATE_SET: "Due date set",
 };
 
 export const STATUS_STYLES: Record<string, string> = {

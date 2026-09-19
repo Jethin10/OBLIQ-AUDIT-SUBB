@@ -9,7 +9,8 @@ import type { SessionUser } from "./auth";
  * while staff only see clients assigned to them.
  */
 
-const DEFAULT_DOC_TYPES = [
+/** The checklist every new client gets. Also quoted on the landing page. */
+export const DEFAULT_DOC_TYPES = [
   "Bank Statement",
   "Sales Register",
   "Purchase Register",
@@ -25,6 +26,7 @@ export interface ClientListRow {
   total: number;
   approved: number;
   corrections: number;
+  needs_attention: number;
 }
 
 export function listClientsForUser(user: SessionUser): ClientListRow[] {
@@ -32,7 +34,11 @@ export function listClientsForUser(user: SessionUser): ClientListRow[] {
     SELECT c.id, c.name, c.assigned_staff_id, u.name AS staff_name,
            (SELECT COUNT(*) FROM documents d WHERE d.client_id = c.id) AS total,
            (SELECT COUNT(*) FROM documents d WHERE d.client_id = c.id AND d.status = 'APPROVED') AS approved,
-           (SELECT COUNT(*) FROM documents d WHERE d.client_id = c.id AND d.status = 'CORRECTION_REQUIRED') AS corrections
+           (SELECT COUNT(*) FROM documents d WHERE d.client_id = c.id AND d.status = 'CORRECTION_REQUIRED') AS corrections,
+           (SELECT COUNT(*) FROM documents d
+             WHERE d.client_id = c.id AND d.status != 'APPROVED'
+               AND (d.status = 'CORRECTION_REQUIRED'
+                    OR (d.due_date IS NOT NULL AND d.due_date < date('now')))) AS needs_attention
       FROM clients c
       LEFT JOIN users u ON u.id = c.assigned_staff_id
      WHERE c.firm_id = ?`;
@@ -84,17 +90,62 @@ export interface DocumentListRow {
   uploader_name: string | null;
   correction_comment: string | null;
   file_name: string | null;
+  due_date: string | null;
 }
 
 export function listDocumentsForClient(clientId: number, firmId: number): DocumentListRow[] {
   return query<DocumentListRow>(
     `SELECT d.id, d.doc_type, d.status, d.version, d.uploaded_at,
-            up.name AS uploader_name, d.correction_comment, d.file_name
+            up.name AS uploader_name, d.correction_comment, d.file_name, d.due_date
        FROM documents d
        LEFT JOIN users up ON up.id = d.uploaded_by
       WHERE d.firm_id = ? AND d.client_id = ?
       ORDER BY d.id ASC`,
     [firmId, clientId]
+  );
+}
+
+export interface AttentionRow {
+  id: number;
+  doc_type: string;
+  status: string;
+  version: number;
+  due_date: string | null;
+  uploaded_at: string | null;
+  correction_comment: string | null;
+  client_id: number;
+  client_name: string;
+  is_overdue: number;
+}
+
+/**
+ * The "needs attention" queue: every non-approved document in the firm that
+ * either has an open correction request or is past its due date. Reviewers see
+ * the whole firm; staff see only their assigned clients. Ordered most urgent
+ * first (overdue, then corrections, then by soonest due date).
+ */
+export function listAttentionForUser(user: SessionUser): AttentionRow[] {
+  const base = `
+    SELECT d.id, d.doc_type, d.status, d.version, d.due_date, d.uploaded_at,
+           d.correction_comment, d.client_id, c.name AS client_name,
+           CASE WHEN d.due_date IS NOT NULL AND d.due_date < date('now') THEN 1 ELSE 0 END AS is_overdue
+      FROM documents d
+      JOIN clients c ON c.id = d.client_id AND c.firm_id = d.firm_id
+     WHERE d.firm_id = ? AND d.status != 'APPROVED'
+       AND (d.status = 'CORRECTION_REQUIRED'
+            OR (d.due_date IS NOT NULL AND d.due_date < date('now')))`;
+  const order = `
+     ORDER BY is_overdue DESC,
+              (d.status = 'CORRECTION_REQUIRED') DESC,
+              d.due_date IS NULL ASC,
+              d.due_date ASC,
+              d.id ASC`;
+  if (user.role === "REVIEWER") {
+    return query<AttentionRow>(base + order, [user.firmId]);
+  }
+  return query<AttentionRow>(
+    base + " AND c.assigned_staff_id = ?" + order,
+    [user.firmId, user.id]
   );
 }
 

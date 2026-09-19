@@ -9,14 +9,19 @@ import { runInsert, type DbValue } from "./db";
  * transaction as the action being recorded (see callers in lib/documents.ts).
  */
 
-export type AuditAction =
-  | "CLIENT_CREATED"
-  | "DOCUMENT_REQUIRED"
-  | "DOCUMENT_UPLOADED"
-  | "REVIEW_STARTED"
-  | "DOCUMENT_APPROVED"
-  | "CORRECTION_REQUESTED"
-  | "ACCESS_DENIED";
+/** Every action the log can hold. The union below is derived from this list. */
+export const AUDIT_ACTIONS = [
+  "CLIENT_CREATED",
+  "DOCUMENT_REQUIRED",
+  "DOCUMENT_UPLOADED",
+  "REVIEW_STARTED",
+  "DOCUMENT_APPROVED",
+  "CORRECTION_REQUESTED",
+  "DUE_DATE_SET",
+  "ACCESS_DENIED",
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 export interface AuditEventInput {
   firmId: number;

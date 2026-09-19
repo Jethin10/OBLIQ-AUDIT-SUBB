@@ -12,10 +12,29 @@ export function getDb(): DatabaseSync {
     fs.mkdirSync(dir, { recursive: true });
     db = new DatabaseSync(path.join(dir, "audit.db"));
     db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;");
+    migrate(db);
   }
   return db;
 }
+
+/**
+ * Idempotent column backfill for databases created before a column existed.
+ * Runs on every connection open so app routes and the landing lib share one
+ * migration path regardless of which touches the database first.
+ */
+function migrate(database: DatabaseSync): void {
+  const documentColumns = database
+    .prepare("PRAGMA table_info(documents)")
+    .all()
+    .map((row) => String((row as { name: string }).name));
+  // Only alter when the table already exists; a fresh database gets the column
+  // from schema.sql via initSchema().
+  if (documentColumns.length > 0 && !documentColumns.includes("due_date")) {
+    database.exec("ALTER TABLE documents ADD COLUMN due_date TEXT");
+  }
+}
 export function initSchema(): void {
+  // getDb() already ran migrate(); the schema then creates any missing tables.
   getDb().exec(fs.readFileSync(path.join(process.cwd(), "lib", "schema.sql"), "utf8"));
 }
 function toPlainObject<T>(row: T): T {

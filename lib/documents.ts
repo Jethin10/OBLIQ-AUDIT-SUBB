@@ -34,6 +34,7 @@ export interface DocumentRow {
   correction_comment: string | null;
   uploader_name: string | null;
   reviewer_name: string | null;
+  due_date: string | null;
 }
 
 function statusLabel(status: string): string {
@@ -47,7 +48,7 @@ export function getDocumentForUser(documentId: number, user: SessionUser): Docum
     `SELECT d.id, d.firm_id, d.client_id, d.doc_type, d.status, d.version,
             d.file_name, d.file_mime, d.file_size, d.uploaded_at,
             d.review_started_by, d.reviewed_by, d.reviewed_at,
-            d.correction_comment,
+            d.correction_comment, d.due_date,
             c.name AS client_name, c.assigned_staff_id,
             up.name AS uploader_name, rv.name AS reviewer_name
        FROM documents d
@@ -203,6 +204,41 @@ export async function storeUpload(
       action: "DOCUMENT_UPLOADED",
       version: newVersion,
       detail: `Uploaded '${fileName}' for ${doc.doc_type}`,
+    });
+  });
+}
+
+/**
+ * Set (or clear) a document's due date. Reviewers own deadlines. This is a
+ * workflow metadata change, so it is audited like every other material action.
+ * `dueDate` is an ISO `YYYY-MM-DD` string, or null to clear.
+ */
+export function setDocumentDueDate(
+  user: SessionUser,
+  documentId: number,
+  dueDate: string | null
+): void {
+  if (user.role !== "REVIEWER") {
+    throw new ApiError(403, "Only reviewers can set due dates");
+  }
+  transaction(() => {
+    const doc = loadOwnedDocument(user, documentId);
+    run(
+      `UPDATE documents SET due_date = ? WHERE id = ? AND firm_id = ?`,
+      [dueDate, doc.id, user.firmId]
+    );
+    recordAudit({
+      firmId: user.firmId,
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      clientId: doc.client_id,
+      documentId: doc.id,
+      action: "DUE_DATE_SET",
+      version: doc.version,
+      detail: dueDate
+        ? `Due date set to ${dueDate} for '${doc.doc_type}'`
+        : `Due date cleared for '${doc.doc_type}'`,
     });
   });
 }

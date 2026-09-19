@@ -8,6 +8,8 @@
 
 # next.js
 /.next/
+/.next-build/
+/.next-test/
 /out/
 
 # production
@@ -37,6 +39,9 @@ npm-install.log*
 /.next-corrupt-*/
 
 # local test/build/dev artifacts
+/dev.out.log
+/dev.err.log
+/.tmp-video/
 /dev-server*.log
 /reference-server*.log
 /dev-ui*.log

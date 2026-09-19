@@ -28,29 +28,51 @@ export default async function ClientDetailPage({
     const events = listRecentEventsForClient(clientId, user.firmId);
     const approved = documents.filter((document) => document.status === "APPROVED").length;
     const corrections = documents.filter((document) => document.status === "CORRECTION_REQUIRED").length;
+    const today = new Date().toISOString().slice(0, 10);
+    const overdue = documents.filter(
+      (document) => document.status !== "APPROVED" && document.due_date && document.due_date < today
+    ).length;
 
     return (
       <div className="ob-app ob-page-enter">
         <header className="ob-header">
           <Link href="/clients" className="ob-logo">OBLIQ</Link>
-          <span className="ob-header-path">Clients / {client.name}</span>
+          <nav className="ob-header-nav" aria-label="Workspace">
+            <Link href="/clients">Clients</Link>
+            <span className="ob-header-crumb" aria-current="page">/ {client.name}</span>
+          </nav>
           <div className="ob-header-user">
-            <span>{user.name} / {user.role.toLowerCase()}</span>
+            <span className="ob-header-who">
+              <strong>{user.name}</strong>
+              <span>{user.firmName} · {user.role.toLowerCase()}</span>
+            </span>
             <LogoutButton />
           </div>
         </header>
 
         <main className="ob-main">
-          <section className="ob-hero">
-            <div className="ob-hero-meta ob-reveal">
-              <p><Link href="/clients">Back to clients</Link><br />{user.firmName}</p>
-              <p>Assigned to {client.staff_name ?? "Unassigned"}<br />{approved}/{documents.length} approved / {corrections} corrections</p>
+          <div className="ob-pagehead">
+            <div>
+              <h1>{client.name}</h1>
+              <p className="ob-pagehead-sub">
+                Assigned to {client.staff_name ?? "Unassigned"} · required evidence, decisions, and every action on record.
+              </p>
             </div>
-            <div className="ob-hero-copy ob-reveal" style={{ "--delay": "90ms" } as React.CSSProperties}>
-              <h1 className="long">{client.name}</h1>
-              <p>Required evidence, review decisions, and every material action in one record.</p>
-            </div>
-          </section>
+            <dl className="ob-stats">
+              <div className="ob-stat">
+                <dt>Approved</dt>
+                <dd>{approved}<span className="ob-stat-total">/{documents.length}</span></dd>
+              </div>
+              <div className={`ob-stat ${corrections > 0 ? "is-warn" : ""}`}>
+                <dt>Corrections</dt>
+                <dd>{corrections}</dd>
+              </div>
+              <div className={`ob-stat ${overdue > 0 ? "is-alert" : ""}`}>
+                <dt>Overdue</dt>
+                <dd>{overdue}</dd>
+              </div>
+            </dl>
+          </div>
 
           <ClientWorkspace
             clientId={client.id}
