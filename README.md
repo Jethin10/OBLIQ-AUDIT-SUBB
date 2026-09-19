@@ -246,8 +246,13 @@ after the trust and accountability core is solid.
 
 ChatGPT: not used.
 Claude: pair-programmed the full implementation via Cline — scaffolding,
-schema, API, UI, tests, and this README. Debugging was driven by real
-evidence (server logs, failing tests), not assumptions.
+schema, API, UI, tests, and this README. Also drove the follow-up polish pass:
+replaced the landing media with product-appropriate stock, fixed a malformed
+inline script that was silently breaking the landing animation runtime,
+redesigned the workspace into a cleaner light product-tool UI, added due dates,
+a needs-attention queue, workspace status filters, and CSV export of the audit
+trail, and made the app container-deployable. Debugging was driven by real
+evidence (server logs, failing tests, in-browser DOM inspection), not assumptions.
 Gemini: not used.
 Cursor: not used.
 GitHub Copilot: not used.
@@ -262,5 +267,6 @@ explain every part of the system: the transition table, composite-FK tenant
 model, transactional audit writes, the null-prototype → plain-object RSC
 boundary fix, and the deterministic test lifecycle. I also made — and can defend
 — the deliberate trade-offs: 404-not-403 for cross-tenant reads,
-approved-document immutability, review ownership, and the Origin-based CSRF
-posture.
+approved-document immutability, review ownership, the Origin-based CSRF
+posture, and keeping the stack self-contained (SQLite + local storage) instead
+of reaching for services the brief explicitly said were out of scope.
