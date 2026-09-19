@@ -1,0 +1,18 @@
+# Render deployment (Docker). Add a persistent disk mounted at /app/data.
+services:
+  - type: web
+    name: obliq-audit
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /app/data
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+    disk:
+      name: obliq-data
+      mountPath: /app/data
+      sizeGB: 1

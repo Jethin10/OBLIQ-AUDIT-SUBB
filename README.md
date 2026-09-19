@@ -59,6 +59,30 @@ The state machine (`lib/state.ts`) is an explicit allow-list: any transition not
 in the table is rejected by the **server** with `409 Conflict`. The UI hiding a
 button is not part of the security model.
 
+## Deploy (Railway / Render / Fly / Docker)
+
+This app is intentionally self-contained: Next.js + embedded SQLite + local file
+storage, so it deploys as a single container. It does **not** run on Vercel —
+Vercel is serverless with a read-only filesystem and no `node:sqlite`.
+
+**Docker (works everywhere):**
+
+```bash
+docker build -t obliq-audit .
+docker run -p 3000:3000 -v obliq_data:/app/data obliq-audit
+```
+
+The container builds the app, then `scripts/start-production.mjs` seeds the demo
+data on first boot only (never wipes existing data) and starts the server. Mount
+a volume at `/app/data` so the database and uploaded files persist across restarts.
+
+**One-click configs included:**
+- `railway.toml` — Railway (attach a Volume at `/app/data`)
+- `render.yaml` — Render (provisions a 1 GB disk at `/app/data`)
+- `fly.toml` — Fly.io (run `fly volumes create obliq_data --size 1` first)
+
+Health check for every platform: `GET /api/health`.
+
 ## Architecture
 
 ```

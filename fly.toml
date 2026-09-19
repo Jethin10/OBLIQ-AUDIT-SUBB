@@ -1,0 +1,33 @@
+# Fly.io deployment. Create a volume first:  fly volumes create obliq_data --size 1
+app = "obliq-audit"
+primary_region = "bom"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  DATA_DIR = "/app/data"
+  NEXT_TELEMETRY_DISABLED = "1"
+  PORT = "3000"
+
+[mounts]
+  source = "obliq_data"
+  destination = "/app/data"
+
+[[services]]
+  internal_port = 3000
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
+    path = "/api/health"
+    interval = "30s"
+    timeout = "10s"
